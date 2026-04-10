@@ -1,0 +1,1516 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PAT &amp; Tiers-Lieux Nourriciers — Carte interactive</title>
+
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300..700&display=swap" rel="stylesheet">
+
+  <!-- Leaflet CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+
+  <style>
+    /* ========== RESET & BASE ========== */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html {
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+      text-rendering: optimizeLegibility;
+      scroll-behavior: smooth;
+    }
+
+    /* ========== TOKENS ========== */
+    :root {
+      /* Type scale */
+      --text-xs: clamp(0.75rem, 0.7rem + 0.25vw, 0.8125rem);
+      --text-sm: clamp(0.8125rem, 0.78rem + 0.2vw, 0.875rem);
+      --text-base: clamp(0.875rem, 0.85rem + 0.15vw, 0.9375rem);
+      --text-lg: clamp(1rem, 0.95rem + 0.3vw, 1.125rem);
+      --text-xl: clamp(1.25rem, 1.1rem + 0.6vw, 1.5rem);
+      --text-2xl: clamp(1.5rem, 1.2rem + 1vw, 2rem);
+
+      /* Spacing */
+      --space-1: 0.25rem;
+      --space-2: 0.5rem;
+      --space-3: 0.75rem;
+      --space-4: 1rem;
+      --space-5: 1.25rem;
+      --space-6: 1.5rem;
+      --space-8: 2rem;
+      --space-10: 2.5rem;
+      --space-12: 3rem;
+
+      /* Colors — from the Livre Blanc */
+      --green: #8bb535;
+      --green-dark: #6e9220;
+      --green-light: #e8f2d0;
+      --green-lighter: #f4f9e8;
+      --green-bg: #f8faf0;
+      --purple: #4a3d8f;
+      --purple-dark: #3a2f73;
+      --purple-light: #e8e5f5;
+      --purple-lighter: #f3f1fa;
+      --white: #ffffff;
+      --bg: #f9fafb;
+      --surface: #ffffff;
+      --text: #1f2937;
+      --text-muted: #6b7280;
+      --text-faint: #9ca3af;
+      --border: #e5e7eb;
+      --border-light: #f0f1f3;
+      --divider: #e5e7eb;
+
+      /* Radius */
+      --radius-sm: 0.375rem;
+      --radius-md: 0.5rem;
+      --radius-lg: 0.75rem;
+      --radius-xl: 1rem;
+      --radius-full: 9999px;
+
+      /* Transitions */
+      --ease: cubic-bezier(0.16, 1, 0.3, 1);
+      --transition: 200ms cubic-bezier(0.16, 1, 0.3, 1);
+
+      /* Shadows */
+      --shadow-sm: 0 1px 3px rgba(0,0,0,0.06);
+      --shadow-md: 0 4px 12px rgba(0,0,0,0.08);
+      --shadow-lg: 0 12px 32px rgba(0,0,0,0.1);
+      --shadow-xl: 0 20px 48px rgba(0,0,0,0.12);
+
+      /* Font */
+      --font-body: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    }
+
+    body {
+      font-family: var(--font-body);
+      font-size: var(--text-base);
+      color: var(--text);
+      background: var(--bg);
+      line-height: 1.6;
+      overflow: hidden;
+      height: 100dvh;
+    }
+
+    /* ========== LAYOUT ========== */
+    .app {
+      display: flex;
+      flex-direction: column;
+      height: 100dvh;
+      overflow: hidden;
+    }
+
+    /* ========== HEADER ========== */
+    .header {
+      display: flex;
+      align-items: center;
+      gap: var(--space-4);
+      padding: var(--space-3) var(--space-6);
+      background: var(--white);
+      border-bottom: 1px solid var(--border);
+      z-index: 1000;
+      flex-shrink: 0;
+    }
+
+    .header-logo {
+      display: flex;
+      align-items: center;
+      gap: var(--space-3);
+      flex-shrink: 0;
+    }
+
+    .header-logo svg {
+      flex-shrink: 0;
+    }
+
+    .header-title-group {
+      display: flex;
+      flex-direction: column;
+      gap: 0;
+    }
+
+    .header-title {
+      font-size: var(--text-lg);
+      font-weight: 700;
+      color: var(--purple);
+      line-height: 1.2;
+      letter-spacing: -0.01em;
+    }
+
+    .header-subtitle {
+      font-size: var(--text-xs);
+      color: var(--text-muted);
+      line-height: 1.3;
+    }
+
+    .header-source {
+      margin-left: auto;
+      font-size: var(--text-xs);
+      color: var(--text-faint);
+      text-align: right;
+      max-width: 280px;
+      line-height: 1.4;
+      flex-shrink: 0;
+    }
+
+    .header-stats {
+      display: flex;
+      gap: var(--space-4);
+      margin-left: auto;
+      flex-shrink: 0;
+    }
+
+    .stat-pill {
+      display: flex;
+      align-items: center;
+      gap: var(--space-2);
+      padding: var(--space-1) var(--space-3);
+      background: var(--green-lighter);
+      border-radius: var(--radius-full);
+      font-size: var(--text-xs);
+      font-weight: 600;
+      color: var(--green-dark);
+    }
+
+    .stat-pill .num {
+      font-weight: 700;
+      font-size: var(--text-sm);
+      font-variant-numeric: tabular-nums;
+    }
+
+    /* ========== MAIN CONTENT ========== */
+    .main {
+      display: flex;
+      flex: 1;
+      overflow: hidden;
+      position: relative;
+    }
+
+    /* ========== SIDEBAR ========== */
+    .sidebar {
+      width: 380px;
+      min-width: 380px;
+      background: var(--white);
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      z-index: 500;
+      transition: transform 0.35s var(--ease);
+    }
+
+    .sidebar-search {
+      padding: var(--space-4);
+      border-bottom: 1px solid var(--border-light);
+      flex-shrink: 0;
+    }
+
+    .search-wrapper {
+      position: relative;
+    }
+
+    .search-wrapper svg {
+      position: absolute;
+      left: var(--space-3);
+      top: 50%;
+      transform: translateY(-50%);
+      color: var(--text-faint);
+      pointer-events: none;
+    }
+
+    .search-input {
+      width: 100%;
+      padding: var(--space-2) var(--space-3) var(--space-2) var(--space-10);
+      border: 1.5px solid var(--border);
+      border-radius: var(--radius-lg);
+      font-size: var(--text-sm);
+      background: var(--bg);
+      color: var(--text);
+      outline: none;
+      transition: border-color var(--transition), box-shadow var(--transition);
+    }
+
+    .search-input:focus {
+      border-color: var(--green);
+      box-shadow: 0 0 0 3px rgba(139, 181, 53, 0.15);
+    }
+
+    .search-input::placeholder {
+      color: var(--text-faint);
+    }
+
+    .filter-row {
+      display: flex;
+      gap: var(--space-2);
+      margin-top: var(--space-3);
+      flex-wrap: wrap;
+    }
+
+    .filter-chip {
+      padding: var(--space-1) var(--space-3);
+      border: 1.5px solid var(--border);
+      border-radius: var(--radius-full);
+      font-size: var(--text-xs);
+      font-weight: 500;
+      color: var(--text-muted);
+      cursor: pointer;
+      transition: all var(--transition);
+      background: var(--white);
+      white-space: nowrap;
+    }
+
+    .filter-chip:hover {
+      border-color: var(--green);
+      color: var(--green-dark);
+      background: var(--green-lighter);
+    }
+
+    .filter-chip.active {
+      border-color: var(--green);
+      background: var(--green-light);
+      color: var(--green-dark);
+      font-weight: 600;
+    }
+
+    /* ========== PAT LIST ========== */
+    .pat-list {
+      flex: 1;
+      overflow-y: auto;
+      overflow-x: hidden;
+      scrollbar-width: thin;
+      scrollbar-color: var(--border) transparent;
+    }
+
+    .pat-list::-webkit-scrollbar {
+      width: 6px;
+    }
+    .pat-list::-webkit-scrollbar-thumb {
+      background: var(--border);
+      border-radius: 3px;
+    }
+
+    .pat-list-header {
+      padding: var(--space-3) var(--space-4);
+      font-size: var(--text-xs);
+      font-weight: 600;
+      color: var(--text-faint);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      border-bottom: 1px solid var(--border-light);
+      background: var(--bg);
+      position: sticky;
+      top: 0;
+      z-index: 5;
+    }
+
+    .pat-item {
+      padding: var(--space-3) var(--space-4);
+      border-bottom: 1px solid var(--border-light);
+      cursor: pointer;
+      transition: background var(--transition);
+      position: relative;
+    }
+
+    .pat-item::before {
+      content: '';
+      position: absolute;
+      left: 0;
+      top: 0;
+      bottom: 0;
+      width: 3px;
+      background: var(--green);
+      opacity: 0;
+      transition: opacity var(--transition);
+    }
+
+    .pat-item:hover {
+      background: var(--green-bg);
+    }
+
+    .pat-item:hover::before {
+      opacity: 1;
+    }
+
+    .pat-item.active {
+      background: var(--green-lighter);
+    }
+
+    .pat-item.active::before {
+      opacity: 1;
+    }
+
+    .pat-item-name {
+      font-size: var(--text-sm);
+      font-weight: 600;
+      color: var(--text);
+      line-height: 1.35;
+      margin-bottom: var(--space-1);
+    }
+
+    .pat-item-meta {
+      display: flex;
+      align-items: center;
+      gap: var(--space-2);
+      font-size: var(--text-xs);
+      color: var(--text-muted);
+    }
+
+    .pat-item-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 2px 8px;
+      background: var(--purple-lighter);
+      color: var(--purple);
+      border-radius: var(--radius-full);
+      font-size: 11px;
+      font-weight: 600;
+    }
+
+    .pat-item-tl-count {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-size: var(--text-xs);
+      color: var(--green-dark);
+      font-weight: 500;
+    }
+
+    .pat-item-tl-count svg {
+      flex-shrink: 0;
+    }
+
+    .no-results {
+      padding: var(--space-8) var(--space-4);
+      text-align: center;
+      color: var(--text-muted);
+    }
+
+    .no-results-icon {
+      display: block;
+      margin: 0 auto var(--space-3);
+      color: var(--text-faint);
+    }
+
+    .no-results p {
+      max-width: none;
+    }
+
+    /* ========== FICHE (DETAIL PANEL) ========== */
+    .fiche-panel {
+      position: absolute;
+      inset: 0;
+      background: var(--white);
+      z-index: 10;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      transform: translateX(-100%);
+      transition: transform 0.35s var(--ease);
+    }
+
+    .fiche-panel.open {
+      transform: translateX(0);
+    }
+
+    .fiche-header {
+      display: flex;
+      align-items: center;
+      gap: var(--space-3);
+      padding: var(--space-3) var(--space-4);
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+
+    .fiche-back {
+      display: flex;
+      align-items: center;
+      gap: var(--space-2);
+      font-size: var(--text-sm);
+      font-weight: 500;
+      color: var(--purple);
+      cursor: pointer;
+      padding: var(--space-1) var(--space-2);
+      border-radius: var(--radius-md);
+      transition: background var(--transition);
+    }
+
+    .fiche-back:hover {
+      background: var(--purple-lighter);
+    }
+
+    .fiche-content {
+      flex: 1;
+      overflow-y: auto;
+      padding: var(--space-5);
+      scrollbar-width: thin;
+      scrollbar-color: var(--border) transparent;
+    }
+
+    .fiche-content::-webkit-scrollbar {
+      width: 6px;
+    }
+    .fiche-content::-webkit-scrollbar-thumb {
+      background: var(--border);
+      border-radius: 3px;
+    }
+
+    .fiche-name {
+      font-size: var(--text-xl);
+      font-weight: 700;
+      color: var(--text);
+      line-height: 1.25;
+      margin-bottom: var(--space-3);
+      letter-spacing: -0.01em;
+    }
+
+    .fiche-badges {
+      display: flex;
+      gap: var(--space-2);
+      flex-wrap: wrap;
+      margin-bottom: var(--space-4);
+    }
+
+    .fiche-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: var(--space-1) var(--space-3);
+      border-radius: var(--radius-full);
+      font-size: var(--text-xs);
+      font-weight: 600;
+    }
+
+    .fiche-badge--region {
+      background: var(--purple-light);
+      color: var(--purple);
+    }
+
+    .fiche-badge--dept {
+      background: var(--green-light);
+      color: var(--green-dark);
+    }
+
+    .fiche-badge--page {
+      background: #fef3c7;
+      color: #92400e;
+    }
+
+    .fiche-info-row {
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-1);
+      padding: var(--space-3) 0;
+      border-bottom: 1px solid var(--border-light);
+    }
+
+    .fiche-info-label {
+      font-size: var(--text-xs);
+      font-weight: 600;
+      color: var(--text-faint);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+
+    .fiche-info-value {
+      font-size: var(--text-sm);
+      color: var(--text);
+      line-height: 1.5;
+    }
+
+    .fiche-section {
+      margin-top: var(--space-5);
+    }
+
+    .fiche-section-title {
+      display: flex;
+      align-items: center;
+      gap: var(--space-2);
+      font-size: var(--text-sm);
+      font-weight: 700;
+      color: var(--purple);
+      margin-bottom: var(--space-3);
+      padding-bottom: var(--space-2);
+      border-bottom: 2px solid var(--purple-light);
+    }
+
+    .fiche-section-title svg {
+      flex-shrink: 0;
+    }
+
+    .fiche-tl-list {
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-2);
+    }
+
+    .fiche-tl-item {
+      display: flex;
+      align-items: flex-start;
+      gap: var(--space-2);
+      padding: var(--space-2) var(--space-3);
+      background: var(--green-lighter);
+      border-radius: var(--radius-md);
+      font-size: var(--text-sm);
+      color: var(--green-dark);
+      font-weight: 500;
+      line-height: 1.4;
+    }
+
+    .fiche-tl-item svg {
+      flex-shrink: 0;
+      margin-top: 2px;
+    }
+
+    .fiche-act-list {
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-2);
+      list-style: none;
+    }
+
+    .fiche-act-item {
+      display: flex;
+      align-items: flex-start;
+      gap: var(--space-2);
+      font-size: var(--text-sm);
+      line-height: 1.5;
+      color: var(--text);
+    }
+
+    .fiche-act-item::before {
+      content: '';
+      display: block;
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--green);
+      flex-shrink: 0;
+      margin-top: 7px;
+    }
+
+    .fiche-coop-text {
+      font-size: var(--text-sm);
+      line-height: 1.65;
+      color: var(--text);
+      background: var(--purple-lighter);
+      padding: var(--space-4);
+      border-radius: var(--radius-lg);
+      border-left: 3px solid var(--purple);
+    }
+
+    .fiche-no-tl {
+      font-size: var(--text-sm);
+      color: var(--text-muted);
+      font-style: italic;
+      padding: var(--space-2) 0;
+    }
+
+    /* ========== MAP ========== */
+    .map-container {
+      flex: 1;
+      position: relative;
+    }
+
+    #map {
+      width: 100%;
+      height: 100%;
+    }
+
+    /* Custom marker */
+    .pat-marker {
+      width: 32px;
+      height: 40px;
+      position: relative;
+      cursor: pointer;
+      filter: drop-shadow(0 2px 4px rgba(0,0,0,0.2));
+      transition: transform 0.2s var(--ease), filter 0.2s var(--ease);
+    }
+
+    .pat-marker:hover {
+      transform: scale(1.15) translateY(-3px);
+      filter: drop-shadow(0 4px 8px rgba(0,0,0,0.25));
+    }
+
+    .pat-marker.active {
+      transform: scale(1.25) translateY(-4px);
+      filter: drop-shadow(0 6px 12px rgba(0,0,0,0.3));
+    }
+
+    /* Leaflet popup override */
+    .leaflet-popup-content-wrapper {
+      border-radius: var(--radius-lg) !important;
+      box-shadow: var(--shadow-lg) !important;
+      padding: 0 !important;
+    }
+
+    .leaflet-popup-content {
+      margin: 0 !important;
+      min-width: 200px;
+    }
+
+    .popup-content {
+      padding: var(--space-3) var(--space-4);
+    }
+
+    .popup-name {
+      font-size: var(--text-sm);
+      font-weight: 700;
+      color: var(--text);
+      line-height: 1.3;
+      margin-bottom: var(--space-1);
+    }
+
+    .popup-region {
+      font-size: var(--text-xs);
+      color: var(--text-muted);
+      margin-bottom: var(--space-2);
+    }
+
+    .popup-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: var(--space-1);
+      padding: var(--space-1) var(--space-3);
+      background: var(--green);
+      color: white;
+      border-radius: var(--radius-md);
+      font-size: var(--text-xs);
+      font-weight: 600;
+      cursor: pointer;
+      border: none;
+      transition: background var(--transition);
+    }
+
+    .popup-btn:hover {
+      background: var(--green-dark);
+    }
+
+    .leaflet-popup-tip {
+      box-shadow: none !important;
+    }
+
+    /* Leaflet controls */
+    .leaflet-control-zoom a {
+      color: var(--purple) !important;
+      border-color: var(--border) !important;
+    }
+
+    .leaflet-control-zoom a:hover {
+      background: var(--purple-lighter) !important;
+    }
+
+    /* ========== MOBILE TOGGLE ========== */
+    .sidebar-toggle {
+      display: none;
+      position: fixed;
+      bottom: var(--space-4);
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 1100;
+      padding: var(--space-3) var(--space-6);
+      background: var(--purple);
+      color: white;
+      border: none;
+      border-radius: var(--radius-full);
+      font-size: var(--text-sm);
+      font-weight: 600;
+      cursor: pointer;
+      box-shadow: var(--shadow-lg);
+      transition: background var(--transition), transform 0.3s var(--ease);
+      white-space: nowrap;
+    }
+
+    .sidebar-toggle:hover {
+      background: var(--purple-dark);
+    }
+
+    .sidebar-toggle:active {
+      transform: translateX(-50%) scale(0.96);
+    }
+
+    .sidebar-toggle svg {
+      display: inline;
+      vertical-align: middle;
+      margin-right: var(--space-2);
+    }
+
+    /* ========== MOBILE OVERLAY ========== */
+    .sidebar-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.35);
+      z-index: 999;
+      opacity: 0;
+      transition: opacity 0.3s var(--ease);
+    }
+
+    .sidebar-overlay.visible {
+      opacity: 1;
+    }
+
+    /* ========== RESPONSIVE ========== */
+    @media (max-width: 768px) {
+      .header {
+        padding: var(--space-2) var(--space-3);
+        gap: var(--space-2);
+      }
+
+      .header-source { display: none; }
+      .header-stats { display: none; }
+
+      .header-logo svg {
+        width: 28px;
+        height: 28px;
+      }
+
+      .header-title {
+        font-size: var(--text-sm);
+      }
+
+      .header-subtitle {
+        display: none;
+      }
+
+      .sidebar {
+        position: fixed;
+        top: 0;
+        left: 0;
+        bottom: 0;
+        width: 100%;
+        min-width: unset;
+        transform: translateY(100%);
+        border-right: none;
+        border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+        margin-top: 56px;
+        z-index: 1001;
+      }
+
+      .sidebar.mobile-open {
+        transform: translateY(0);
+      }
+
+      .sidebar-toggle {
+        display: flex;
+        align-items: center;
+      }
+
+      .sidebar-overlay {
+        display: block;
+      }
+
+      .map-container {
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+      }
+
+      .main {
+        position: relative;
+      }
+    }
+
+    @media (max-width: 480px) {
+      .fiche-name {
+        font-size: var(--text-lg);
+      }
+    }
+
+    /* ========== ANIMATIONS ========== */
+    @keyframes fadeInUp {
+      from { opacity: 0; transform: translateY(8px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .pat-item {
+      animation: fadeInUp 0.25s var(--ease) both;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        transition-duration: 0.01ms !important;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <div class="app">
+    <!-- HEADER -->
+    <header class="header">
+      <div class="header-logo">
+        <!-- Custom SVG Logo -->
+        <svg width="36" height="36" viewBox="0 0 36 36" fill="none" aria-label="PAT & Tiers-Lieux Nourriciers">
+          <rect width="36" height="36" rx="8" fill="#4a3d8f"/>
+          <path d="M10 22 C10 14, 14 10, 18 10 C22 10, 26 14, 26 22" stroke="#8bb535" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+          <circle cx="18" cy="10" r="2.5" fill="#8bb535"/>
+          <path d="M14 26 L18 18 L22 26" stroke="white" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+          <circle cx="12" cy="22" r="1.5" fill="#8bb535" opacity="0.7"/>
+          <circle cx="24" cy="22" r="1.5" fill="#8bb535" opacity="0.7"/>
+        </svg>
+        <div class="header-title-group">
+          <h1 class="header-title">PAT &amp; Tiers-Lieux Nourriciers</h1>
+          <p class="header-subtitle">Carte interactive des coopérations alimentaires territoriales</p>
+        </div>
+      </div>
+
+      <div class="header-stats">
+        <div class="stat-pill">
+          <span class="num">18</span> PAT
+        </div>
+        <div class="stat-pill">
+          <span class="num">7</span> régions
+        </div>
+      </div>
+
+      <p class="header-source">Source : Livre blanc PAT &amp; Tiers-Lieux Nourriciers — France Tiers-Lieux, mars 2026</p>
+    </header>
+
+    <!-- MAIN -->
+    <div class="main">
+      <!-- SIDEBAR -->
+      <aside class="sidebar" id="sidebar">
+        <!-- Search -->
+        <div class="sidebar-search">
+          <div class="search-wrapper">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+              <circle cx="11" cy="11" r="8"/>
+              <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+            </svg>
+            <input type="text" class="search-input" id="searchInput" placeholder="Rechercher un PAT, une région…" autocomplete="off">
+          </div>
+          <div class="filter-row" id="filterRow"></div>
+        </div>
+
+        <!-- List / Fiche -->
+        <div style="flex:1;overflow:hidden;position:relative;">
+          <!-- List view -->
+          <div class="pat-list" id="patList">
+            <div class="pat-list-header" id="listHeader">18 projets</div>
+          </div>
+
+          <!-- Fiche panel -->
+          <div class="fiche-panel" id="fichePanel">
+            <div class="fiche-header">
+              <button class="fiche-back" id="ficheBack" aria-label="Retour à la liste">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                  <polyline points="15 18 9 12 15 6"/>
+                </svg>
+                Retour
+              </button>
+            </div>
+            <div class="fiche-content" id="ficheContent"></div>
+          </div>
+        </div>
+      </aside>
+
+      <!-- MAP -->
+      <div class="map-container">
+        <div id="map"></div>
+      </div>
+    </div>
+
+    <!-- Mobile toggle -->
+    <button class="sidebar-toggle" id="sidebarToggle" aria-label="Afficher la liste des PAT">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+        <line x1="3" y1="6" x2="21" y2="6"/>
+        <line x1="3" y1="12" x2="21" y2="12"/>
+        <line x1="3" y1="18" x2="21" y2="18"/>
+      </svg>
+      Liste des PAT
+    </button>
+
+    <!-- Mobile overlay -->
+    <div class="sidebar-overlay" id="sidebarOverlay"></div>
+  </div>
+
+  <!-- Leaflet JS -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <script>
+    // ========== PAT DATA ==========
+    const pats = [
+      {
+        id: 1,
+        name: "PAT de la Ville de Montpellier",
+        region: "Occitanie",
+        departement: "Hérault (34)",
+        porteur: "Ville de Montpellier",
+        contacts: "Justine Labarre, Marie-Clémentine Foussat",
+        lat: 43.6117,
+        lng: 3.8767,
+        tiersLieux: ["Maisons de l'Alimentation Solidaire (MAS)", "Hauts Val & Co"],
+        activites: ["Cité de l'Alimentation (60M€)", "5 MAS dans les quartiers populaires", "Cuisines partagées, ateliers, jardins", "Projet TerrAsol (recherche-action)", "Accueil inconditionnel et mixité sociale", "Éducation populaire et démocratie alimentaire"],
+        cooperation: "La Ville développe un réseau de Maisons de l'Alimentation Solidaire (MAS) comme tiers-lieux éducatifs ancrés dans les quartiers populaires, dans le cadre du projet Cité de l'Alimentation. Le réseau est accompagné par TerrAsol et cofinancé par la Banque des Territoires.",
+        pageLivreBlanc: "p.86"
+      },
+      {
+        id: 2,
+        name: "PAT de la CC de Mirepoix / Pyrénées Cathares",
+        region: "Occitanie",
+        departement: "Ariège (09)",
+        porteur: "Communauté de communes du Pays de Mirepoix",
+        contacts: "Manon Vigier",
+        lat: 43.0886,
+        lng: 1.8733,
+        tiersLieux: ["Maison d'Embarou (Agrosite d'Embarou)"],
+        activites: ["Ferme de 30 hectares acquise par la CC", "Chantier d'insertion maraîcher (CASTA)", "Espace-test agricole (RENETA)", "Réserve foncière pour installation agricole", "Activités pédagogiques et événements grand public", "Labellisé Fabrique de Territoire"],
+        cooperation: "L'Agrosite d'Embarou combine insertion, test agricole et réserve foncière. La Maison d'Embarou, tiers-lieu nourricier en émergence, a vocation à devenir une 'maison du PAT'. Convention tripartite avec SAFER et Chambre d'agriculture.",
+        pageLivreBlanc: "p.74"
+      },
+      {
+        id: 3,
+        name: "PAT du Pays Haut Languedoc et Vignobles",
+        region: "Occitanie",
+        departement: "Hérault (34)",
+        porteur: "Pays Haut Languedoc et Vignobles",
+        contacts: "Laurence Tkaczuk",
+        lat: 43.4667,
+        lng: 2.95,
+        tiersLieux: ["Le Couvent d'Azillanet", "SCIC Atelier Paysan (Félines-Minervois)"],
+        activites: ["Épicerie solidaire", "Jardin partagé", "Ateliers cuisine", "Rencontres avec producteurs", "Formation autoconstruction matériel agricole"],
+        cooperation: "Le Couvent d'Azillanet est un relais opérationnel pour la démocratie alimentaire (ateliers participatifs, épicerie en vrac, circuits courts). L'Atelier Paysan forme les producteurs à l'autoconstruction d'outils agricoles adaptés.",
+        pageLivreBlanc: "—"
+      },
+      {
+        id: 4,
+        name: "PAT du PETR Ariège",
+        region: "Occitanie",
+        departement: "Ariège (09)",
+        porteur: "PETR Ariège",
+        contacts: "Sébastien Blazy, Lauren Joonekindt",
+        lat: 42.9667,
+        lng: 1.6,
+        tiersLieux: ["Tiers-lieux autour de la CCAMPA"],
+        activites: ["CCAMPA (Caisse Commune Alimentaire)", "Articulation politique agricole et action sociale", "Recherche-action ENSFEA/INRAE", "Structuration circuits courts"],
+        cooperation: "Le PETR articule politique agricole (CA09, SAFER, ADEAR), action sociale et recherche publique (ENSFEA, INRAE) pour structurer des dispositifs collectifs comme la CCAMPA, à la croisée de l'agriculture, solidarité et participation citoyenne.",
+        pageLivreBlanc: "—"
+      },
+      {
+        id: 5,
+        name: "PAT du PETR Armagnac",
+        region: "Occitanie",
+        departement: "Gers (32)",
+        porteur: "PETR Armagnac",
+        contacts: "Hugo Dereymez",
+        lat: 43.65,
+        lng: 0.05,
+        tiersLieux: [],
+        activites: ["PAT interrogé dans l'enquête qualitative"],
+        cooperation: "Porteur de PAT interrogé dans le cadre de l'enquête qualitative du livre blanc.",
+        pageLivreBlanc: "—"
+      },
+      {
+        id: 6,
+        name: "PAT du PNR des Grands Causses",
+        region: "Occitanie",
+        departement: "Aveyron (12)",
+        porteur: "Parc naturel régional des Grands Causses",
+        contacts: "Roxanne Wilhelm-Jammes",
+        lat: 44.1,
+        lng: 3.08,
+        tiersLieux: ["Ping Pong Cowork (Millau)", "Le Récantou (La Bastide-Solages)", "Tiers-lieu du Château (Latour-sur-Sorgues)", "Tiers-lieu de Saint-Saturnin-de-Lenne", "Tiers-lieu de Saint-Sever-du-Moustier"],
+        activites: ["Réseau de 5 tiers-lieux nourriciers", "Projet 'Grand Causse Pour Tous'", "Cuisine participative avec Michel Bras", "Banquets de 60 couverts par tiers-lieu", "Valorisation produits du terroir", "Inclusion sociale et transmission culinaire"],
+        cooperation: "Le PNR a accompagné l'émergence d'un réseau de 5 tiers-lieux avec l'ADEFPAT. Le projet 'Grand Causse Pour Tous' (événements de cuisine participative avec le chef Michel Bras) a renforcé le maillage territorial du PAT.",
+        pageLivreBlanc: "p.90"
+      },
+      {
+        id: 7,
+        name: "PAT de Seine-Saint-Denis",
+        region: "Île-de-France",
+        departement: "Seine-Saint-Denis (93)",
+        porteur: "Conseil départemental de Seine-Saint-Denis",
+        contacts: "Romain Dhainaut",
+        lat: 48.9356,
+        lng: 2.3539,
+        tiersLieux: ["Ferme des Possibles (Stains)", "LAB3S", "Cour Jardinée Jean Moulin (Aubervilliers)", "Veni Verdi", "Terres Urbaines", "Pas Si Loin", "Ferme du Cœur"],
+        activites: ["Programme 'Tiers-lieux Autonomie dans mon quartier'", "15 structures soutenues", "Agriculture urbaine et insertion", "Cantine solidaire", "24 salariés en insertion, 10 travailleurs handicapés", "Labellisé Tiers-lieu Autonomie"],
+        cooperation: "Le PAT s'articule avec la politique 'Tiers-lieux Autonomie' du département (3 AAP depuis 2020, jusqu'à 100 000€ par tiers-lieu). La Ferme des Possibles (SCIC) conjugue production agricole, restauration, circuits courts et insertion. Plus de 40% des lauréats engagés dans l'agriculture urbaine.",
+        pageLivreBlanc: "p.60"
+      },
+      {
+        id: 8,
+        name: "PAT Cœur de Savoie",
+        region: "Auvergne-Rhône-Alpes",
+        departement: "Savoie (73)",
+        porteur: "Cœur de Savoie",
+        contacts: "Pauline Pison",
+        lat: 45.5,
+        lng: 6.2,
+        tiersLieux: ["La Popote"],
+        activites: ["Jardin d'insertion en permaculture", "Mare pédagogique", "Espace de 65m² pour porteurs de projets", "Chambre froide de 5m³", "Sensibilisation agriculture durable", "Inclusion sociale et professionnelle"],
+        cooperation: "La Popote est intégrée depuis l'origine dans la stratégie du PAT via l'association Terre Solidaire. Binôme opérationnel entre animatrices PAT et tiers-lieu. Articulation avec l'AAP 'Mieux manger pour tous'. L'intégration a servi l'obtention de la labellisation niveau 2.",
+        pageLivreBlanc: "—"
+      },
+      {
+        id: 9,
+        name: "PAT du Grand Avignon",
+        region: "Provence-Alpes-Côte d'Azur",
+        departement: "Vaucluse (84)",
+        porteur: "Grand Avignon",
+        contacts: "Quentin Bronisz",
+        lat: 43.9493,
+        lng: 4.8055,
+        tiersLieux: ["Le Tipi (ferme urbaine)", "Roquette Sud", "Semailles", "Espace-test agricole Mas Baudoin"],
+        activites: ["Agriculture urbaine en QPV", "Cofinancement PAT / Politique de la Ville", "32 000 visiteurs en 5 ans (Le Tipi)", "18 emplois créés, 33 volontaires en service civique", "3 tonnes de légumes redistribués gratuitement", "81 événements, 440 journées à la ferme"],
+        cooperation: "Partenariat structurant entre PAT et Politique de la Ville pour soutenir l'agriculture urbaine en QPV. Le Tipi (association Jeunes Pousses) est une ferme urbaine dans les quartiers Montclar et Chamfleury. Cofinancement via le Contrat de Ville.",
+        pageLivreBlanc: "p.58"
+      },
+      {
+        id: 10,
+        name: "PAT de la Métropole de Lyon",
+        region: "Auvergne-Rhône-Alpes",
+        departement: "Rhône (69)",
+        porteur: "Métropole de Lyon",
+        contacts: "Sarah Muhlberger",
+        lat: 45.764,
+        lng: 4.8357,
+        tiersLieux: ["MESA (Sécurité Sociale de l'Alimentation)", "Récupéria (anti-gaspillage)", "Faitout (justice alimentaire)", "La Galoche (accompagnement projets)", "Ziboulab (handicap)"],
+        activites: ["PATly : 5 chantiers, 24 fiches actions, 190 actions", "Objectif : 1 tiers-lieu par arrondissement", "Charte locale 'Hallimentaires'", "Cercle d'échanges avec 15 PAT voisins (rayon 38km)", "Coordination PAT / ESS / Santé"],
+        cooperation: "Le PATly intègre fortement les tiers-lieux dans sa stratégie alimentaire. Réflexion en cours pour une ligne d'action dédiée aux tiers-lieux pour le prochain mandat. Cercle d'échanges régulier avec 15 PAT voisins pour relier territoires ruraux et demande urbaine.",
+        pageLivreBlanc: "p.64"
+      },
+      {
+        id: 11,
+        name: "PAT de Saint-Étienne Métropole",
+        region: "Auvergne-Rhône-Alpes",
+        departement: "Loire (42)",
+        porteur: "Saint-Étienne Métropole",
+        contacts: "Nicolas Quittard",
+        lat: 45.4397,
+        lng: 4.3872,
+        tiersLieux: ["Les Amis du Treuil (Chambœuf)"],
+        activites: ["Tiers-lieu rural dans une ferme de 380m²", "170 adhérents, 37 organisations membres", "Auto-construction de matériel agricole", "Mutualisation ateliers et bureaux", "2000h de bénévolat depuis 2019", "Gouvernance horizontale et ouverte"],
+        cooperation: "Convention pluriannuelle entre le PAT et le tiers-lieu Les Amis du Treuil. Programme d'actions annuel articulé autour des grands axes du PAT, élaboré avec les porteurs de projets locaux. Le tiers-lieu se positionne comme une CUMA citoyenne.",
+        pageLivreBlanc: "p.68"
+      },
+      {
+        id: 12,
+        name: "PAT du Cubzagais Nord Gironde / DAT Haute-Gironde",
+        region: "Nouvelle-Aquitaine",
+        departement: "Gironde (33)",
+        porteur: "DAT Haute-Gironde",
+        contacts: "Laura Boudier, Iman Boudehri",
+        lat: 45.05,
+        lng: -0.45,
+        tiersLieux: ["Espaces Saquary"],
+        activites: ["Intégration dans la gouvernance du PAT", "Ciné-débats de sensibilisation citoyenne", "Actions de sensibilisation"],
+        cooperation: "Les Espaces Saquary sont intégrés à la gouvernance du PAT et contribuent à des actions de sensibilisation citoyenne, comme l'organisation de ciné-débats.",
+        pageLivreBlanc: "—"
+      },
+      {
+        id: 13,
+        name: "PAT du Grand Libournais",
+        region: "Nouvelle-Aquitaine",
+        departement: "Gironde (33)",
+        porteur: "Grand Libournais",
+        contacts: "Valérie Gandré",
+        lat: 44.92,
+        lng: -0.23,
+        tiersLieux: ["Plateforme Éclosion", "La Ferme du Passage", "La Ferme Deux Bouts", "La Possiblerie"],
+        activites: ["Plateforme Éclosion (Fabrique de Territoire)", "Pôle ressources métiers de la transition", "Maraîchage bio et insertion", "Coworking et programmation événementielle", "Laboratoire d'innovation écologique"],
+        cooperation: "La plateforme Éclosion, labellisée Fabrique de Territoire, agit comme pôle ressources en lien avec le PAT. Elle accompagne des projets nourriciers : Ferme du Passage (réinsertion), Ferme Deux Bouts (insertion maraîchage bio), La Possiblerie (innovation agroécologique).",
+        pageLivreBlanc: "—"
+      },
+      {
+        id: 14,
+        name: "PAT de Limoges Métropole",
+        region: "Nouvelle-Aquitaine",
+        departement: "Haute-Vienne (87)",
+        porteur: "Limoges Métropole",
+        contacts: "Pauline Desbuisson",
+        lat: 45.8336,
+        lng: 1.2611,
+        tiersLieux: [],
+        activites: ["PAT interrogé dans l'enquête qualitative"],
+        cooperation: "Porteur de PAT interrogé dans le cadre de l'enquête qualitative du livre blanc.",
+        pageLivreBlanc: "—"
+      },
+      {
+        id: 15,
+        name: "PAT des Landes",
+        region: "Nouvelle-Aquitaine",
+        departement: "Landes (40)",
+        porteur: "Département des Landes",
+        contacts: "Yan Chasserio, Sabine Dauga",
+        lat: 43.8933,
+        lng: -0.4992,
+        tiersLieux: ["La Smalah"],
+        activites: ["Forum alimentaire départemental", "Dialogue et reconnaissance progressive", "Identification des tiers-lieux dans la stratégie"],
+        cooperation: "Le tiers-lieu La Smalah est désormais identifié par le PAT départemental et participe activement au forum alimentaire, témoignant d'une reconnaissance progressive de son rôle.",
+        pageLivreBlanc: "—"
+      },
+      {
+        id: 16,
+        name: "PAT du PETR Adour Chalosse Tursan",
+        region: "Nouvelle-Aquitaine",
+        departement: "Landes (40)",
+        porteur: "PETR Adour Chalosse Tursan",
+        contacts: "Matthieu Duchaussoy",
+        lat: 43.72,
+        lng: -0.65,
+        tiersLieux: [],
+        activites: ["Discussions émergentes avec tiers-lieux", "Interrogations sur la place dans les politiques agricoles"],
+        cooperation: "Des discussions émergent avec plusieurs tiers-lieux qui s'interrogent sur leur place dans les politiques agricoles et alimentaires, mais aucun cadre structuré ni soutien opérationnel n'a encore vu le jour.",
+        pageLivreBlanc: "—"
+      },
+      {
+        id: 17,
+        name: "PAT du Haut-Pays du Montreuillois",
+        region: "Hauts-de-France",
+        departement: "Pas-de-Calais (62)",
+        porteur: "Haut-Pays du Montreuillois",
+        contacts: "Christophe Bujwol",
+        lat: 50.45,
+        lng: 1.95,
+        tiersLieux: [],
+        activites: ["PAT interrogé dans l'enquête qualitative"],
+        cooperation: "Porteur de PAT interrogé dans le cadre de l'enquête qualitative du livre blanc.",
+        pageLivreBlanc: "—"
+      },
+      {
+        id: 18,
+        name: "PAT du SICOVAL (Castanet-Tolosan)",
+        region: "Occitanie",
+        departement: "Haute-Garonne (31)",
+        porteur: "SICOVAL",
+        contacts: "—",
+        lat: 43.5167,
+        lng: 1.5,
+        tiersLieux: ["Le Centième Singe (SCIC)"],
+        activites: ["800m² de bâtiments, 3 hectares de parcelles", "5 lieux d'incubation agroécologique", "Couveuse d'activité agricole (CAPE)", "Foncier mutualisé (pépinière)", "Espace test de production maraîchère", "Bureaux pour 10 structures, ateliers partagés"],
+        cooperation: "Le Centième Singe (SCIC), partenaire historique du PAT du SICOVAL, est déployé en archipel avec un site principal à Castanet-Tolosan et 5 lieux d'incubation. Il sécurise les parcours des porteurs de projets via couveuse CAPE, foncier mutualisé et accompagnement individualisé.",
+        pageLivreBlanc: "—"
+      }
+    ];
+
+    // ========== REGIONS ==========
+    const regions = [...new Set(pats.map(p => p.region))].sort();
+
+    // ========== STATE ==========
+    let activePat = null;
+    let activeFilter = null;
+    let markers = {};
+    let mobileOpen = false;
+
+    // ========== MAP SETUP ==========
+    const map = L.map('map', {
+      center: [46.5, 2.5],
+      zoom: 6,
+      zoomControl: true,
+      attributionControl: true
+    });
+
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap</a> &copy; <a href="https://carto.com/" target="_blank" rel="noopener noreferrer">CARTO</a>',
+      subdomains: 'abcd',
+      maxZoom: 18
+    }).addTo(map);
+
+    // Custom marker SVG
+    function createMarkerIcon(isActive) {
+      const color = isActive ? '#4a3d8f' : '#8bb535';
+      const size = isActive ? [38, 48] : [30, 38];
+      return L.divIcon({
+        className: '',
+        html: `<svg width="${size[0]}" height="${size[1]}" viewBox="0 0 30 38" fill="none" class="pat-marker${isActive ? ' active' : ''}">
+          <path d="M15 37C15 37 28 24.5 28 14.5C28 7.04 22.18 1 15 1C7.82 1 2 7.04 2 14.5C2 24.5 15 37 15 37Z" fill="${color}" stroke="white" stroke-width="2"/>
+          <circle cx="15" cy="14" r="6" fill="white"/>
+          <circle cx="15" cy="14" r="3" fill="${color}"/>
+        </svg>`,
+        iconSize: size,
+        iconAnchor: [size[0] / 2, size[1]],
+        popupAnchor: [0, -size[1] + 6]
+      });
+    }
+
+    // Add markers
+    pats.forEach(pat => {
+      const marker = L.marker([pat.lat, pat.lng], {
+        icon: createMarkerIcon(false)
+      }).addTo(map);
+
+      const tlCount = pat.tiersLieux.length;
+      const tlLabel = tlCount > 0 ? `<span style="color:#6e9220;font-weight:600;">${tlCount} tiers-lieu${tlCount > 1 ? 'x' : ''}</span>` : '<span style="color:#9ca3af;font-style:italic;">Aucun tiers-lieu</span>';
+
+      marker.bindPopup(`
+        <div class="popup-content">
+          <div class="popup-name">${pat.name}</div>
+          <div class="popup-region">${pat.region} · ${pat.departement}</div>
+          <div style="margin-bottom:8px;">${tlLabel}</div>
+          <button class="popup-btn" onclick="openFiche(${pat.id})">
+            Voir la fiche
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><polyline points="9 6 15 12 9 18"/></svg>
+          </button>
+        </div>
+      `, { closeButton: true, maxWidth: 260 });
+
+      marker.on('click', () => {
+        setActiveMarker(pat.id);
+      });
+
+      markers[pat.id] = marker;
+    });
+
+    // ========== FILTER CHIPS ==========
+    const filterRow = document.getElementById('filterRow');
+    regions.forEach(region => {
+      const chip = document.createElement('button');
+      chip.className = 'filter-chip';
+      chip.textContent = region;
+      chip.dataset.region = region;
+      chip.addEventListener('click', () => {
+        if (activeFilter === region) {
+          activeFilter = null;
+          chip.classList.remove('active');
+        } else {
+          activeFilter = region;
+          document.querySelectorAll('.filter-chip').forEach(c => c.classList.remove('active'));
+          chip.classList.add('active');
+        }
+        renderList();
+      });
+      filterRow.appendChild(chip);
+    });
+
+    // ========== RENDER LIST ==========
+    function renderList() {
+      const query = document.getElementById('searchInput').value.toLowerCase().trim();
+      const listEl = document.getElementById('patList');
+      const headerEl = document.getElementById('listHeader');
+
+      // Filter
+      let filtered = pats.filter(pat => {
+        const matchSearch = !query ||
+          pat.name.toLowerCase().includes(query) ||
+          pat.region.toLowerCase().includes(query) ||
+          pat.departement.toLowerCase().includes(query) ||
+          pat.porteur.toLowerCase().includes(query) ||
+          pat.tiersLieux.some(tl => tl.toLowerCase().includes(query));
+        const matchRegion = !activeFilter || pat.region === activeFilter;
+        return matchSearch && matchRegion;
+      });
+
+      // Update header
+      headerEl.textContent = `${filtered.length} projet${filtered.length > 1 ? 's' : ''}`;
+
+      // Remove old items
+      listEl.querySelectorAll('.pat-item, .no-results').forEach(el => el.remove());
+
+      if (filtered.length === 0) {
+        listEl.innerHTML += `
+          <div class="no-results">
+            <svg class="no-results-icon" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+              <circle cx="11" cy="11" r="8"/>
+              <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+              <line x1="8" y1="8" x2="14" y2="14"/>
+              <line x1="14" y1="8" x2="8" y2="14"/>
+            </svg>
+            <p>Aucun résultat pour cette recherche</p>
+          </div>
+        `;
+        return;
+      }
+
+      filtered.forEach((pat, i) => {
+        const item = document.createElement('div');
+        item.className = `pat-item${activePat === pat.id ? ' active' : ''}`;
+        item.style.animationDelay = `${i * 30}ms`;
+
+        const tlCount = pat.tiersLieux.length;
+        const tlHtml = tlCount > 0
+          ? `<span class="pat-item-tl-count">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+              ${tlCount} tiers-lieu${tlCount > 1 ? 'x' : ''}
+            </span>`
+          : '';
+
+        item.innerHTML = `
+          <div class="pat-item-name">${pat.name}</div>
+          <div class="pat-item-meta">
+            <span class="pat-item-badge">${pat.region}</span>
+            ${tlHtml}
+          </div>
+        `;
+
+        item.addEventListener('click', () => openFiche(pat.id));
+        listEl.appendChild(item);
+      });
+
+      // Show/hide markers
+      pats.forEach(pat => {
+        const isVisible = filtered.some(f => f.id === pat.id);
+        if (isVisible) {
+          if (!map.hasLayer(markers[pat.id])) markers[pat.id].addTo(map);
+        } else {
+          if (map.hasLayer(markers[pat.id])) map.removeLayer(markers[pat.id]);
+        }
+      });
+    }
+
+    // ========== SEARCH ==========
+    document.getElementById('searchInput').addEventListener('input', renderList);
+
+    // ========== ACTIVE MARKER ==========
+    function setActiveMarker(patId) {
+      // Reset previous
+      if (activePat && markers[activePat]) {
+        markers[activePat].setIcon(createMarkerIcon(false));
+      }
+      activePat = patId;
+      if (markers[patId]) {
+        markers[patId].setIcon(createMarkerIcon(true));
+      }
+    }
+
+    // ========== OPEN FICHE ==========
+    function openFiche(patId) {
+      const pat = pats.find(p => p.id === patId);
+      if (!pat) return;
+
+      setActiveMarker(patId);
+
+      // Pan map
+      map.flyTo([pat.lat, pat.lng], 10, { duration: 0.8 });
+      map.closePopup();
+
+      // Build fiche content
+      const ficheContent = document.getElementById('ficheContent');
+
+      const pageHtml = pat.pageLivreBlanc !== '—'
+        ? `<span class="fiche-badge fiche-badge--page">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+            Livre blanc ${pat.pageLivreBlanc}
+          </span>`
+        : '';
+
+      const tlHtml = pat.tiersLieux.length > 0
+        ? `<div class="fiche-tl-list">
+            ${pat.tiersLieux.map(tl => `
+              <div class="fiche-tl-item">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+                ${tl}
+              </div>
+            `).join('')}
+          </div>`
+        : '<p class="fiche-no-tl">Aucun tiers-lieu identifié pour ce PAT.</p>';
+
+      ficheContent.innerHTML = `
+        <h2 class="fiche-name">${pat.name}</h2>
+
+        <div class="fiche-badges">
+          <span class="fiche-badge fiche-badge--region">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+            ${pat.region}
+          </span>
+          <span class="fiche-badge fiche-badge--dept">${pat.departement}</span>
+          ${pageHtml}
+        </div>
+
+        <div class="fiche-info-row">
+          <span class="fiche-info-label">Porteur</span>
+          <span class="fiche-info-value">${pat.porteur}</span>
+        </div>
+
+        <div class="fiche-info-row">
+          <span class="fiche-info-label">Contacts</span>
+          <span class="fiche-info-value">${pat.contacts}</span>
+        </div>
+
+        <div class="fiche-section">
+          <h3 class="fiche-section-title">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+            Tiers-lieux associés
+          </h3>
+          ${tlHtml}
+        </div>
+
+        <div class="fiche-section">
+          <h3 class="fiche-section-title">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+            Activités clés
+          </h3>
+          <ul class="fiche-act-list">
+            ${pat.activites.map(a => `<li class="fiche-act-item">${a}</li>`).join('')}
+          </ul>
+        </div>
+
+        <div class="fiche-section">
+          <h3 class="fiche-section-title">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+            Coopérations
+          </h3>
+          <div class="fiche-coop-text">${pat.cooperation}</div>
+        </div>
+      `;
+
+      // Show fiche panel
+      document.getElementById('fichePanel').classList.add('open');
+
+      // Update list active state
+      document.querySelectorAll('.pat-item').forEach((el, i) => {
+        el.classList.toggle('active', false);
+      });
+      renderList();
+
+      // On mobile, close sidebar overlay but show fiche
+      if (window.innerWidth <= 768 && !mobileOpen) {
+        toggleSidebar(true);
+      }
+    }
+
+    // ========== CLOSE FICHE ==========
+    document.getElementById('ficheBack').addEventListener('click', () => {
+      document.getElementById('fichePanel').classList.remove('open');
+      if (activePat && markers[activePat]) {
+        markers[activePat].setIcon(createMarkerIcon(false));
+      }
+      activePat = null;
+      map.flyTo([46.5, 2.5], 6, { duration: 0.8 });
+      renderList();
+    });
+
+    // ========== MOBILE SIDEBAR ==========
+    function toggleSidebar(forceOpen) {
+      const sidebar = document.getElementById('sidebar');
+      const overlay = document.getElementById('sidebarOverlay');
+      const toggle = document.getElementById('sidebarToggle');
+
+      mobileOpen = forceOpen !== undefined ? forceOpen : !mobileOpen;
+
+      if (mobileOpen) {
+        sidebar.classList.add('mobile-open');
+        requestAnimationFrame(() => overlay.classList.add('visible'));
+        toggle.innerHTML = `
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          Fermer
+        `;
+      } else {
+        sidebar.classList.remove('mobile-open');
+        overlay.classList.remove('visible');
+        toggle.innerHTML = `
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+          Liste des PAT
+        `;
+      }
+    }
+
+    document.getElementById('sidebarToggle').addEventListener('click', () => toggleSidebar());
+    document.getElementById('sidebarOverlay').addEventListener('click', () => toggleSidebar(false));
+
+    // ========== INIT ==========
+    renderList();
+
+    // Invalidate map size after transition
+    setTimeout(() => map.invalidateSize(), 400);
+    window.addEventListener('resize', () => map.invalidateSize());
+  </script>
+</body>
+</html>
